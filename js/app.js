@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.1';
+  const VERSION = '1.1.1';
   const $ = function (s) { return document.querySelector(s); };
   const S = Stats;
 
@@ -137,7 +137,6 @@
     } else {
       html += '<div class="stack">' + tpls.map(cardTpl).join('') + '</div>';
     }
-    html += '<button class="btn ghost wide" data-act="start-free">' + ic.plus + 'Séance libre</button>';
     return html;
   }
 
@@ -821,7 +820,6 @@
     const act = el.dataset.act, id = el.dataset.id;
     switch (act) {
       case 'start': startSession(id); break;
-      case 'start-free': startSession(null); break;
       case 'open-ex': closeSheet(); go('#/ex/' + id); break;
       case 'entry-menu': ev.stopPropagation(); entryMenu(id); break;
       case 'target': case 'skip': case 'replace': case 'move': case 'remove-entry': entryAction(act, +el.dataset.d || 0); break;
