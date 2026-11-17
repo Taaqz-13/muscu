@@ -4,7 +4,7 @@
    apres une mise en ligne melange ancien et nouveau JS. On force donc la
    revalidation ('no-cache' = 304 si rien n'a change). Piege deja paye sur
    les apps Taches et Prompteur. Changer CACHE a chaque mise en ligne. */
-const CACHE = 'muscu-v1';
+const CACHE = 'muscu-v2';
 const ASSETS = [
   './', './index.html', './manifest.json', './css/app.css',
   './js/seed.js', './js/stats.js', './js/store.js', './js/sync.js', './js/app.js',

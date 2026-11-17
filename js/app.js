@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.0';
+  const VERSION = '1.0.1';
   const $ = function (s) { return document.querySelector(s); };
   const S = Stats;
 
@@ -654,7 +654,7 @@
       '<label>Dépôt privé<input id="set-repo" autocomplete="off" autocapitalize="off" value="' + h(st.owner + '/' + st.repo) + '"></label>' +
       '<div class="row2"><button class="btn ghost" data-act="sync-now">Copier maintenant</button><button class="btn primary" data-act="settings-save">Enregistrer</button></div>' +
       '<details><summary>Comment créer le jeton (une fois par appareil)</summary><ol>' +
-      '<li>Sur github.com, compte <b>Taaqz-13</b> : créer un dépôt <b>privé</b> nommé <b>muscu-data</b> (vide).</li>' +
+      '<li>Le dépôt privé <b>Taaqz-13/muscu-data</b> existe déjà (créé le 17/11/2026).</li>' +
       '<li>Settings &gt; Developer settings &gt; Personal access tokens &gt; <b>Fine-grained tokens</b> &gt; Generate new token.</li>' +
       '<li>Repository access : <b>Only select repositories</b> &gt; <b>muscu-data</b>.</li>' +
       '<li>Permissions &gt; Repository &gt; <b>Contents : Read and write</b>. Expiration au choix.</li>' +
