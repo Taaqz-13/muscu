@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.1.1';
+  const VERSION = '1.2';
   const $ = function (s) { return document.querySelector(s); };
   const S = Stats;
 
@@ -40,6 +40,43 @@
     skip: svg('<path d="M5 6l7 6-7 6M13 6l7 6-7 6"/>'),
     search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/>')
   };
+
+  /* ---------- Icone de muscle : silhouette de face (gauche) et de dos (droite),
+     le muscle travaille en couleur. Face/dos separent ce qui se confondrait
+     sinon : biceps/triceps, quadriceps/ischios, pectoraux/dos, abdos/lombaires. */
+  const BODY = {
+    head: '<circle cx="8" cy="3" r="2.2"/>', neck: '<rect x="7" y="4.8" width="2" height="1.6"/>',
+    shoulders: '<circle cx="4.4" cy="7.6" r="1.5"/><circle cx="11.6" cy="7.6" r="1.5"/>',
+    torso: '<rect x="5.4" y="6.6" width="5.2" height="8.8" rx="1.2"/>',
+    chest: '<rect x="5.4" y="6.8" width="5.2" height="3.4" rx="1"/>',
+    upperback: '<rect x="5.4" y="6.8" width="5.2" height="5.4" rx="1"/>',
+    trap: '<path d="M5.2 7.2L8 5.2l2.8 2 -1.2 1.2H6.4z"/>',
+    abs: '<rect x="6.3" y="10.6" width="3.4" height="4.6" rx=".8"/>',
+    lowerback: '<rect x="6.2" y="12.4" width="3.6" height="3" rx=".8"/>',
+    arms: '<rect x="2.2" y="8.4" width="2.5" height="5" rx="1.2"/><rect x="11.3" y="8.4" width="2.5" height="5" rx="1.2"/>',
+    forearms: '<rect x="1.9" y="13.8" width="2.3" height="4.6" rx="1.1"/><rect x="11.8" y="13.8" width="2.3" height="4.6" rx="1.1"/>',
+    hips: '<rect x="5.4" y="15" width="5.2" height="3.2" rx="1.2"/>',
+    thighs: '<rect x="5.2" y="17.8" width="2.7" height="6.8" rx="1.3"/><rect x="8.1" y="17.8" width="2.7" height="6.8" rx="1.3"/>',
+    calves: '<rect x="5.4" y="25.2" width="2.3" height="5.4" rx="1.1"/><rect x="8.3" y="25.2" width="2.3" height="5.4" rx="1.1"/>'
+  };
+  const BASE = ['head', 'neck', 'shoulders', 'torso', 'arms', 'forearms', 'hips', 'thighs', 'calves'];
+  const MUSCLE_ZONES = {
+    'Pectoraux': [['chest'], []], 'Dos': [[], ['upperback']], 'Épaules': [['shoulders'], ['shoulders']],
+    'Biceps': [['arms'], []], 'Triceps': [[], ['arms']], 'Avant-bras': [['forearms'], ['forearms']],
+    'Quadriceps': [['thighs'], []], 'Ischio-jambiers': [[], ['thighs']], 'Fessiers': [[], ['hips']],
+    'Mollets': [[], ['calves']], 'Abdominaux': [['abs'], []], 'Trapèzes': [[], ['trap']], 'Lombaires': [[], ['lowerback']]
+  };
+  const muscleIconCache = {};
+  function muscleIcon(m) {
+    if (muscleIconCache[m]) return muscleIconCache[m];
+    const z = MUSCLE_ZONES[m] || [[], []];
+    const fig = function (hl, dx) {
+      return '<g transform="translate(' + dx + ' 0)"><g class="mb">' + BASE.map(function (p) { return BODY[p]; }).join('') + '</g>' +
+        '<g class="mh">' + hl.map(function (p) { return BODY[p]; }).join('') + '</g></g>';
+    };
+    return (muscleIconCache[m] = '<span class="micon" title="' + h(m) + '"><svg viewBox="0 0.5 32 31" aria-hidden="true">' + fig(z[0], 0) + fig(z[1], 16) + '</svg></span>');
+  }
+  function exIcon(id) { const e = exo(id); return muscleIcon(e ? e.muscle : ''); }
 
   /* ---------- Formatage ---------- */
   function h(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -108,7 +145,12 @@
       default: html = vHome();
     }
     if (html == null) return; /* redirection en cours */
+    const restEl = $('#rest');
+    if (restEl.parentNode !== document.body) document.body.appendChild(restEl);
     $('#view').innerHTML = html;
+    const slot = $('#rest-slot');
+    if (slot) slot.appendChild(restEl);
+    renderRest();
     const tab = { '': 'seance', ex: 'seance', programmes: 'prog', programme: 'prog', exercices: 'prog', stats: 'stats', historique: 'hist' }[p[0] || ''] || '';
     document.querySelectorAll('#tabbar .tab').forEach(function (t) { t.classList.toggle('on', t.dataset.tab === tab); });
     if (r !== ui.lastRoute) { window.scrollTo(0, 0); ui.lastRoute = r; }
@@ -160,7 +202,11 @@
     const s = {
       id: Store.uid('s'), templateId: t ? t.id : null, name: t ? t.name : 'Séance libre',
       start: new Date().toISOString(), end: null,
-      entries: t ? t.items.map(function (i) { return { id: Store.uid('e'), exId: i.exId, target: i.sets || 3, sets: [] }; }) : []
+      entries: t ? t.items.map(function (i) {
+        const e = { id: Store.uid('e'), exId: i.exId, target: i.sets || 3, sets: [] };
+        if (i.reps || i.kg) e.plan = { reps: i.reps || '', kg: +i.kg || 0 };
+        return e;
+      }) : []
     };
     saveSession(s);
     go('#/');
@@ -180,9 +226,10 @@
   function entryRow(s, e) {
     const n = e.sets.length, tgt = e.target || 3, done = n >= tgt;
     const lp = S.lastPerf(doc(), e.exId, s.id);
-    const sub = n ? "Aujourd'hui : " + setsLine(e.sets) : (lp ? 'Dernière : ' + setsLine(lp.sets) : 'Première fois');
+    const pl = planTxt(tgt, e.plan);
+    const sub = n ? "Aujourd'hui : " + setsLine(e.sets) : (lp ? 'Dernière : ' + setsLine(lp.sets) : pl ? 'Prévu : ' + pl : 'Première fois');
     return '<div class="entry' + (done ? ' done' : n ? ' started' : '') + '" data-act="open-ex" data-id="' + e.id + '">' +
-      '<div class="prog">' + (done ? ic.check : n + '/' + tgt) + '</div>' +
+      '<div class="prog">' + (done ? ic.check : n + '/' + tgt) + '</div>' + exIcon(e.exId) +
       '<div class="en-main"><div class="en-name">' + h(exName(e.exId)) + '</div><div class="en-sub">' + h(sub) + '</div></div>' +
       '<button class="iconbtn" data-act="entry-menu" data-id="' + e.id + '" aria-label="Options">' + ic.dots + '</button></div>';
   }
@@ -191,7 +238,14 @@
     if (e.sets.length) { const l = e.sets[e.sets.length - 1]; return { kg: +l.kg || 0, reps: +l.reps || 0 }; }
     const lp = S.lastPerf(doc(), e.exId, s.id);
     if (lp) return { kg: +lp.sets[0].kg || 0, reps: +lp.sets[0].reps || 0 };
+    if (e.plan) return { kg: +e.plan.kg || 0, reps: parseInt(e.plan.reps, 10) || 0 };
     return { kg: 0, reps: 0 };
+  }
+
+  /* Repere de la seance type : « 3 × 8-10 · 60 kg ». null si rien de prevu. */
+  function planTxt(sets, plan) {
+    if (!plan || (!plan.reps && !plan.kg)) return null;
+    return sets + ' × ' + (plan.reps || '?') + (plan.kg ? ' · ' + kgTxt(plan.kg) : '');
   }
 
   function nextEntry(s, e) {
@@ -212,14 +266,22 @@
     const d = ui.draft[e.id] || (ui.draft[e.id] = initDraft(s, e));
     const n = e.sets.length;
     let html = '<header class="top">' + backBtn('#/', 'Séance') + '<div class="top-r"><button class="iconbtn" data-act="entry-menu" data-id="' + e.id + '" aria-label="Options">' + ic.dots + '</button></div></header>';
-    html += '<h1 class="ex-title">' + h(exName(e.exId)) + '</h1>';
+    html += '<h1 class="ex-title with-icon">' + exIcon(e.exId) + '<span>' + h(exName(e.exId)) + '</span></h1>';
     html += '<div class="last card">' +
       '<div class="eyebrow">' + (lp ? 'Dernière fois · ' + dLong(lp.date) : 'Première fois sur cet exercice') + '</div>' +
       (lp ? '<div class="chips">' + lp.sets.map(function (st) { return '<span class="chip">' + setTxt(st) + (st.rpe ? '<small>RPE ' + st.rpe + '</small>' : '') + '</span>'; }).join('') + '</div>' : '') +
+      (!lp && planTxt(e.target || 3, e.plan) ? '<div class="chips"><span class="chip">Prévu : ' + planTxt(e.target || 3, e.plan) + '</span></div>' : '') +
+      (lp && e.plan && e.plan.reps ? '<div class="muted small rec">Objectif : ' + (e.target || 3) + ' × ' + h(e.plan.reps) + ' reps</div>' : '') +
       (b.maxKg ? '<div class="muted small rec">' + ic.trophy + 'Record ' + kgTxt(b.maxKg) + ' · 1RM est. ' + num(b.maxE1rm) + ' kg</div>' : '') +
       '</div>';
+    html += '<div id="rest-slot"></div>';
+    html += '<div class="entry-form card">' +
+      stepper('Kilos', 'in-kg', d.kg ? num(d.kg, 2) : '', 'kg', 'decimal') +
+      stepper('Reps', 'in-reps', d.reps ? String(d.reps) : '', 'reps', 'numeric') +
+      '<button class="btn primary big" data-act="validate" data-id="' + e.id + '">' + ic.check + 'Valider la série ' + (n + 1) + '</button>' +
+      '<div class="muted small center">0 kg = poids du corps</div></div>';
     if (n) {
-      html += '<div class="sets">' + e.sets.map(function (st, i) {
+      html += '<div class="today-h">Aujourd\'hui</div><div class="sets">' + e.sets.map(function (st, i) {
         const pr = S.prCheck(doc(), e.exId, s.id, st);
         return '<button class="setrow" data-act="edit-set" data-sid="' + s.id + '" data-eid="' + e.id + '" data-i="' + i + '">' +
           '<span class="setn">' + (i + 1) + '</span><span class="setv">' + setTxt(st) + '</span>' +
@@ -232,11 +294,6 @@
           [6, 7, 8, 9, 10].map(function (v) { return '<button class="chip-btn" data-act="rpe" data-id="' + e.id + '" data-v="' + v + '">' + v + '</button>'; }).join('') + '</div></div>';
       }
     }
-    html += '<div class="entry-form card">' +
-      stepper('Kilos', 'in-kg', d.kg ? num(d.kg, 2) : '', 'kg', 'decimal') +
-      stepper('Reps', 'in-reps', d.reps ? String(d.reps) : '', 'reps', 'numeric') +
-      '<button class="btn primary big" data-act="validate" data-id="' + e.id + '">' + ic.check + 'Valider la série ' + (n + 1) + '</button>' +
-      '<div class="muted small center">0 kg = poids du corps</div></div>';
     const nx = nextEntry(s, e);
     if (nx) html += '<button class="btn ' + (n >= (e.target || 3) ? 'primary' : 'ghost') + ' wide" data-act="open-ex" data-id="' + nx.id + '">Exercice suivant : ' + h(exName(nx.exId)) + ic.next + '</button>';
     else if (n) html += '<button class="btn ghost wide" data-act="finish">Terminer la séance</button>';
@@ -257,6 +314,8 @@
     const set = { kg: d.kg || 0, reps: Math.round(d.reps), rpe: null, at: Date.now() };
     e.sets.push(set);
     saveSession(s);
+    unlockAudio();
+    startRest(restDurFor(e.exId), e.exId);
     const pr = S.prCheck(doc(), e.exId, s.id, set);
     if (pr) toast((pr === 'kg' ? 'Record de charge' : 'Record 1RM estimé') + ' sur ' + exName(e.exId) + ' !', 'pr');
     else if (e.sets.length === (e.target || 3)) toast('Exercice terminé', 'ok');
@@ -345,7 +404,14 @@
     const box = $('#upd-tpl');
     const t = templateChanged(s);
     if (t && box && box.checked) {
-      t.items = s.entries.map(function (e) { return { exId: e.exId, sets: e.target || 3 }; });
+      const old = {};
+      t.items.forEach(function (i) { old[i.exId] = i; });
+      t.items = s.entries.map(function (e) {
+        const it = { exId: e.exId, sets: e.target || 3 };
+        const p = e.plan || old[e.exId];
+        if (p && (p.reps || p.kg)) { it.reps = p.reps || ''; it.kg = +p.kg || 0; }
+        return it;
+      });
       Store.put('templates', t);
     }
     s.entries = s.entries.filter(function (e) { return e.sets.length; });
@@ -353,6 +419,7 @@
     saveSession(s);
     ui.draft = {};
     closeSheet();
+    stopRest();
     Sync.schedule(0);
     go('#/historique/' + s.id);
     toast('Séance enregistrée', 'ok');
@@ -465,7 +532,7 @@
     $('#pk-list').innerHTML = html;
   }
   function pkRow(e) {
-    return '<button class="pk-row" data-act="pk-pick" data-id="' + e.id + '"><span>' + h(e.name) + (isCustom(e) ? ' <i class="perso">Perso</i>' : '') + '</span>' + (ui.pkMuscle && ui.pkMuscle !== PERSO ? '' : '<small>' + h(e.muscle || '') + '</small>') + '</button>';
+    return '<button class="pk-row" data-act="pk-pick" data-id="' + e.id + '">' + muscleIcon(e.muscle) + '<span class="pk-name">' + h(e.name) + (isCustom(e) ? ' <i class="perso">Perso</i>' : '') + '</span>' + (ui.pkMuscle && ui.pkMuscle !== PERSO ? '' : '<small>' + h(e.muscle || '') + '</small>') + '</button>';
   }
 
   function musclePicker(title, current, act) {
@@ -499,8 +566,10 @@
     let html = '<header class="top">' + backBtn('#/programmes', 'Séances types') + '</header>';
     html += '<input class="name-in" id="tpl-name" data-id="' + t.id + '" value="' + h(t.name) + '" placeholder="Nom de la séance" enterkeyhint="done">';
     html += '<div class="stack">' + t.items.map(function (it, i) {
-      return '<div class="card titem"><div class="ti-main"><div class="en-name">' + h(exName(it.exId)) + '</div>' +
-        '<div class="mini-step"><button class="st-btn sm" data-act="ti-sets" data-i="' + i + '" data-d="-1">−</button><b>' + it.sets + ' séries</b><button class="st-btn sm" data-act="ti-sets" data-i="' + i + '" data-d="1">+</button></div></div>' +
+      return '<div class="card titem">' + exIcon(it.exId) + '<div class="ti-main"><div class="en-name">' + h(exName(it.exId)) + '</div>' +
+        '<div class="mini-step"><button class="st-btn sm" data-act="ti-sets" data-i="' + i + '" data-d="-1">−</button><b>' + it.sets + ' séries</b><button class="st-btn sm" data-act="ti-sets" data-i="' + i + '" data-d="1">+</button></div>' +
+        '<div class="ti-plan"><label>×<input class="ti-in" data-i="' + i + '" data-f="reps" value="' + h(it.reps || '') + '" placeholder="8-10" autocomplete="off" enterkeyhint="done"></label><span>reps</span>' +
+        '<label><input class="ti-in kg" data-i="' + i + '" data-f="kg" value="' + (it.kg ? num(it.kg, 2) : '') + '" placeholder="0" inputmode="decimal" autocomplete="off" enterkeyhint="done"></label><span>kg</span></div></div>' +
         '<div class="ti-act">' +
         '<button class="iconbtn" data-act="ti-move" data-i="' + i + '" data-d="-1" aria-label="Monter"' + (i === 0 ? ' disabled' : '') + '>' + ic.up + '</button>' +
         '<button class="iconbtn" data-act="ti-move" data-i="' + i + '" data-d="1" aria-label="Descendre"' + (i === t.items.length - 1 ? ' disabled' : '') + '>' + ic.down + '</button>' +
@@ -566,7 +635,7 @@
     else html += '<div class="card list">' + ids.map(function (id) {
       const hist = S.exerciseHistory(doc(), id);
       const best = Math.max.apply(null, hist.map(function (x) { return x.maxKg; }));
-      return '<a class="ex-row" href="#/stats/ex/' + id + '"><div><div class="en-name">' + h(exName(id)) + '</div><div class="muted small">' + hist.length + ' séance' + (hist.length > 1 ? 's' : '') + ' · ' + ago(done[id]) + '</div></div>' +
+      return '<a class="ex-row" href="#/stats/ex/' + id + '">' + exIcon(id) + '<div><div class="en-name">' + h(exName(id)) + '</div><div class="muted small">' + hist.length + ' séance' + (hist.length > 1 ? 's' : '') + ' · ' + ago(done[id]) + '</div></div>' +
         spark(hist.slice(-8).map(function (x) { return x.maxKg || x.reps; })) + '<span class="ex-best">' + (best ? kgTxt(best) : '') + '</span></a>';
     }).join('') + '</div>';
     return html;
@@ -753,7 +822,7 @@
     html += '<button class="btn primary wide" data-act="lib-new">' + ic.plus + 'Créer un exercice</button>';
     html += '<div class="mfilter page">' + muscleChips(m, 'lib-filter') + '</div>';
     const row = function (e) {
-      return '<button class="pk-row" data-act="lib-edit" data-id="' + e.id + '"><span>' + h(e.name) + (isCustom(e) ? ' <i class="perso">Perso</i>' : '') + '</span>' +
+      return '<button class="pk-row" data-act="lib-edit" data-id="' + e.id + '">' + muscleIcon(e.muscle) + '<span class="pk-name">' + h(e.name) + (isCustom(e) ? ' <i class="perso">Perso</i>' : '') + '</span>' +
         (m && m !== PERSO ? '' : '<small>' + h(e.muscle || '') + '</small>') + '</button>';
     };
     html += all.length ? '<div class="card list">' + groupedList(all, m, row, 'list-h') + '</div>'
@@ -810,6 +879,88 @@
     } catch (e) { ui.wake = null; }
   }
 
+  /* ---------- Minuteur de repos ----------
+     Se lance tout seul apres chaque serie validee, avec la duree choisie la
+     derniere fois POUR CET EXERCICE (1:30 par defaut). Un tap sur 1:00 / 1:30 /
+     2:00 / 2:30 change la duree sans perdre le temps deja ecoule.
+     Base sur une heure de fin (et non un decompte) : juste apres un verrouillage
+     d'ecran ou une sortie de l'app, le temps restant est exact au retour.
+     Limite iOS : app en arriere-plan = pas de son a la fin. */
+  const REST_KEY = 'muscu.rest.v1';
+  const REST_OPTS = [60, 90, 120, 150];
+  const rest = { start: 0, end: 0, dur: 0, exId: null, timer: null, done: false, built: false };
+  let audio = null;
+
+  function restPrefs() { try { return JSON.parse(localStorage.getItem(REST_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function saveRestPrefs(p) { try { localStorage.setItem(REST_KEY, JSON.stringify(p)); } catch (e) { /* */ } }
+  function restDurFor(exId) { const p = restPrefs(); return (p.byEx && p.byEx[exId]) || p.last || 90; }
+  function mmss(sec) { sec = Math.max(0, Math.ceil(sec)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
+
+  function unlockAudio() {
+    try {
+      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+    } catch (e) { audio = null; }
+  }
+  function beep() {
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* */ }
+    if (!audio) return;
+    [0, 0.25, 0.5].forEach(function (t, i) {
+      const o = audio.createOscillator(), g = audio.createGain(), at = audio.currentTime + t;
+      o.frequency.value = i === 2 ? 1320 : 880;
+      g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.35, at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.18);
+      o.connect(g); g.connect(audio.destination); o.start(at); o.stop(at + 0.2);
+    });
+  }
+
+  function startRest(sec, exId, keepStart) {
+    const p = restPrefs();
+    p.last = sec; p.byEx = p.byEx || {}; if (exId) p.byEx[exId] = sec;
+    rest.start = keepStart && rest.end ? rest.start : Date.now();
+    rest.dur = sec; rest.end = rest.start + sec * 1000; rest.exId = exId; rest.done = rest.end <= Date.now();
+    p.running = { start: rest.start, end: rest.end, dur: sec, exId: exId };
+    saveRestPrefs(p);
+    clearInterval(rest.timer); rest.timer = setInterval(tickRest, 250);
+    tickRest();
+  }
+  function stopRest() {
+    rest.end = 0; rest.done = false; clearInterval(rest.timer);
+    const p = restPrefs(); delete p.running; saveRestPrefs(p);
+    renderRest();
+  }
+  function tickRest() {
+    if (!rest.end) return;
+    if (!rest.done && Date.now() >= rest.end) {
+      rest.done = true;
+      if (document.visibilityState === 'visible') beep();
+      setTimeout(function () { if (rest.done) stopRest(); }, 6000);
+    }
+    renderRest();
+  }
+  function renderRest() {
+    const el = $('#rest');
+    const inline = el.parentNode && el.parentNode.id === 'rest-slot';
+    if (!rest.end) { el.className = ''; document.body.classList.remove('resting'); return; }
+    if (!rest.built) {
+      el.innerHTML = '<div class="rest-bar"><i></i></div><div class="rest-top"><span class="rest-lbl"></span><span class="rest-time"></span>' +
+        '<button class="rest-add" data-act="rest-add">+15 s</button><button class="iconbtn" data-act="rest-stop" aria-label="Arrêter le repos">' + ic.x + '</button></div>' +
+        '<div class="rest-opts">' + REST_OPTS.map(function (s) { return '<button class="mf-chip" data-act="rest-set" data-v="' + s + '">' + mmss(s) + '</button>'; }).join('') + '</div>';
+      rest.built = true;
+    }
+    const left = (rest.end - Date.now()) / 1000;
+    el.className = 'show' + (rest.done ? ' done' : '');
+    document.body.classList.toggle('resting', !inline);
+    el.querySelector('.rest-lbl').textContent = rest.done ? "C'est reparti !" : 'Repos';
+    el.querySelector('.rest-time').textContent = rest.done ? '0:00' : mmss(left);
+    el.querySelector('.rest-bar i').style.width = (rest.done ? 100 : Math.min(100, (1 - left / (rest.end - rest.start) * 1000) * 100)) + '%';
+    el.querySelectorAll('[data-act="rest-set"]').forEach(function (b) { b.classList.toggle('on', +b.dataset.v === rest.dur); });
+  }
+  function resumeRest() {
+    const r = restPrefs().running;
+    if (r && r.end > Date.now() - 3000 && active()) { rest.start = r.start; rest.end = r.end; rest.dur = r.dur; rest.exId = r.exId; rest.done = false; clearInterval(rest.timer); rest.timer = setInterval(tickRest, 250); tickRest(); }
+    else if (r) stopRest();
+  }
+
   /* ---------- Evenements ---------- */
   document.addEventListener('click', function (ev) {
     const el = ev.target.closest('[data-act]');
@@ -861,8 +1012,15 @@
         /* falls through */
       case 'abandon-now': {
         const s = active(); if (s) Store.remove('sessions', s.id);
-        ui.draft = {}; closeSheet(); go('#/'); break;
+        ui.draft = {}; closeSheet(); stopRest(); go('#/'); break;
       }
+      case 'rest-set': unlockAudio(); startRest(+el.dataset.v, rest.exId, true); break;
+      case 'rest-add':
+        if (rest.done || rest.end < Date.now()) { rest.start = Date.now(); rest.end = rest.start + 15000; rest.done = false; }
+        else rest.end += 15000;
+        { const p = restPrefs(); if (p.running) { p.running.start = rest.start; p.running.end = rest.end; saveRestPrefs(p); } }
+        renderRest(); break;
+      case 'rest-stop': stopRest(); break;
       case 'pk-close': closePicker(); break;
       case 'pk-pick': { const cb = ui.pickerCb; closePicker(); if (cb) cb(id); break; }
       case 'pk-create': {
@@ -941,13 +1099,20 @@
       tp.name = t.value.trim() || 'Séance sans nom'; Store.put('templates', tp);
     } else if (t.id === 'import-file' && t.files[0]) {
       importData(t.files[0]); t.value = '';
+    } else if (t.classList.contains('ti-in')) {
+      /* Reps et charge prevues dans la seance type : enregistrees sans re-rendu (le focus reste). */
+      const tp = Store.get('templates', routeParts()[1]); if (!tp) return;
+      const it = tp.items[+t.dataset.i]; if (!it) return;
+      if (t.dataset.f === 'kg') { it.kg = parseNum(t.value); t.value = it.kg ? num(it.kg, 2) : ''; }
+      else it.reps = t.value.trim().replace(/\s+/g, '').replace(/[àa]/gi, '-').slice(0, 12);
+      Store.put('templates', tp);
     }
   });
 
   document.addEventListener('keydown', function (ev) {
     if (ev.key !== 'Enter') return;
     const t = ev.target;
-    if (t.id === 'tpl-name') t.blur();
+    if (t.id === 'tpl-name' || t.classList.contains('ti-in')) t.blur();
     if (t.id === 'in-kg') { $('#in-reps').focus(); ev.preventDefault(); }
     else if (t.id === 'in-reps') { t.blur(); validateSet(routeParts()[1]); }
     else if (t.id === 'pk-q') { const first = $('#pk-list [data-act]'); if (first) first.click(); }
@@ -987,6 +1152,7 @@
   }
   Sync.init();
   render();
+  resumeRest();
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(function () { /* hors ligne indisponible */ });
   }

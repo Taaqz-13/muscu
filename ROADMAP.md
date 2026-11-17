@@ -10,7 +10,11 @@ App de musculation perso de Louis (iPhone, PWA). Créée le 2026-11-17.
 
 ## Choix produit actés (Louis, 2026-11-17)
 - Rien ne bloque en séance : tous les exercices visibles, ordre libre, Passer / Remplacer / Retirer / Ajouter à tout moment, exercice créé à la volée.
-- Saisie d'une série : kilos + reps, RPE facultatif. Pas de minuteur de repos, pas de note.
+- Saisie d'une série : kilos + reps, RPE facultatif. Pas de note.
+- Minuteur de repos (v1.2, demande du 17/11) : se lance seul après chaque série validée, choix 1:00 / 1:30 / 2:00 / 2:30 retenu par exercice, +15 s, basé sur une heure de fin. Dans la fiche exercice il est intégré au-dessus de la saisie (ne cache jamais « Valider »), ailleurs il flotte au-dessus des onglets. Limite iOS : pas de son si l'app est en arrière-plan.
+- Séance type : reps (texte, ex « 8-10 ») et charge prévues par exercice, affichées « Prévu » et utilisées pour pré-remplir tant qu'il n'y a pas d'historique.
+- Icône de muscle (silhouette face + dos, zone en couleur) à côté de chaque exercice.
+- Pas de bouton « Séance libre » (retiré à la demande de Louis, il ne le comprenait pas).
 - Pré-remplissage : 1re série = 1re série de la dernière fois, séries suivantes = série précédente du jour. « Dernière fois » affiché en haut de chaque exercice.
 - Fin de séance : mise à jour de la séance type proposée (décochée par défaut) si l'ordre ou les exercices ont changé.
 - Stats : bilan de la semaine vs semaine d'avant, séries par muscle (muscle principal), courbe par exercice (charge max, 1RM Epley, volume, séries) avec valeurs écrites, historique modifiable.
@@ -22,6 +26,6 @@ App de musculation perso de Louis (iPhone, PWA). Créée le 2026-11-17.
 - `data.json` > 1 Mo : géré (relecture en brut), mais à surveiller au bout de quelques années.
 
 ## Pistes (après retours d'usage)
-- Minuteur de repos optionnel, notes par exercice (réglage machine).
+- Notes par exercice (réglage machine), alternative « OU » dans une séance type.
 - Superséries, séries d'échauffement exclues des stats.
 - Objectif de progression (« +2,5 kg quand 3x10 atteint »).

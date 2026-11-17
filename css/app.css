@@ -273,3 +273,47 @@ details ol { padding-left: 20px; margin: 8px 0 0; display: flex; flex-direction:
 .perso { font-style: normal; font-size: 11px; font-weight: 800; color: var(--accent-ink); border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; margin-left: 6px; vertical-align: 2px; }
 .pk-none { padding: 18px 4px; }
 .lib-link { margin-top: 12px; }
+
+/* ---------- Reps et charge prevues (seance type) ---------- */
+.ti-plan { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); font-weight: 600; }
+.ti-plan label { display: inline-flex; align-items: center; gap: 4px; }
+.ti-in { width: 68px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); text-align: center; font-size: 16px; font-weight: 800; padding: 0 4px; }
+.ti-in.kg { width: 62px; }
+.ti-in:focus { outline: none; border-color: var(--accent); }
+
+/* ---------- Minuteur de repos (au-dessus des onglets) ---------- */
+#rest { position: fixed; left: 50%; transform: translate(-50%, 140%); width: calc(100% - 16px); max-width: 544px; z-index: 15;
+  bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 8px); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 18px; padding: 10px 12px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.25); overflow: hidden; transition: transform .22s; }
+#rest.show { transform: translate(-50%, 0); }
+.rest-bar { position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--surface2); }
+.rest-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s linear; }
+.rest-top { display: flex; align-items: center; gap: 10px; }
+.rest-lbl { font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.rest-time { font-size: 34px; font-weight: 800; letter-spacing: -.02em; margin-right: auto; }
+.rest-add { height: 38px; padding: 0 12px; border-radius: 12px; background: var(--surface2); font-weight: 700; font-size: 14px; }
+.rest-opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 6px; }
+.rest-opts .mf-chip { width: 100%; height: 40px; font-size: 15px; }
+#rest.done { background: var(--accent); border-color: transparent; }
+#rest.done .rest-lbl, #rest.done .rest-time, #rest.done .iconbtn { color: var(--on-accent); }
+#rest.done .rest-bar { display: none; }
+body.resting { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 150px); }
+/* Sur la fiche exercice, le minuteur est dans la page, au-dessus de la saisie (il ne cache jamais « Valider »). */
+#rest-slot #rest { position: relative; left: auto; bottom: auto; transform: none; width: auto; max-width: none; box-shadow: none; margin-bottom: 12px; transition: none; }
+#rest-slot #rest:not(.show) { display: none; }
+.today-h { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 18px 2px 8px; }
+
+/* ---------- Icone de muscle ---------- */
+:root { --muscle: #4f8a00; --muscle-base: #cfcfc5; }
+@media (prefers-color-scheme: dark) { :root { --muscle: #d4ff3a; --muscle-base: #44474d; } }
+.micon { flex: none; width: 42px; height: 42px; border-radius: 11px; background: var(--surface2); display: inline-grid; place-items: center; }
+.micon svg { width: 40px; height: 40px; }
+.micon .mb { fill: var(--muscle-base); }
+.micon .mh { fill: var(--muscle); }
+.card .micon, .entry .micon { background: var(--bg); }
+.pk-row { justify-content: flex-start; min-height: 54px; }
+.pk-row .pk-name { flex: 1; min-width: 0; }
+.ex-title.with-icon { display: flex; align-items: center; gap: 12px; }
+.ex-title.with-icon .micon { width: 54px; height: 54px; border-radius: 14px; }
+.ex-title.with-icon .micon svg { width: 52px; height: 52px; }
+.entry { gap: 10px; }
