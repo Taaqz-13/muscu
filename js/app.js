@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.0.1';
+  const VERSION = '1.1';
   const $ = function (s) { return document.querySelector(s); };
   const S = Stats;
 
@@ -109,7 +109,7 @@
     }
     if (html == null) return; /* redirection en cours */
     $('#view').innerHTML = html;
-    const tab = { '': 'seance', ex: 'seance', programmes: 'prog', programme: 'prog', stats: 'stats', historique: 'hist' }[p[0] || ''] || '';
+    const tab = { '': 'seance', ex: 'seance', programmes: 'prog', programme: 'prog', exercices: 'prog', stats: 'stats', historique: 'hist' }[p[0] || ''] || '';
     document.querySelectorAll('#tabbar .tab').forEach(function (t) { t.classList.toggle('on', t.dataset.tab === tab); });
     if (r !== ui.lastRoute) { window.scrollTo(0, 0); ui.lastRoute = r; }
     updateSyncDot();
@@ -393,6 +393,7 @@
     ui.pickerCb = cb;
     $('#pk-title').textContent = title;
     $('#pk-q').value = '';
+    ui.pkMuscle = '';
     renderPicker();
     $('#picker').classList.add('open');
     document.body.classList.add('noscroll');
@@ -408,28 +409,65 @@
     return out;
   }
 
-  function renderPicker() {
-    const q = norm($('#pk-q').value.trim());
-    const all = liveExercises();
+  /* Exercices crees par Louis (tout ce qui n'est pas dans la bibliotheque de depart). */
+  let seedIds = null;
+  function isCustom(e) {
+    if (!seedIds) { seedIds = {}; Seed.exercises().forEach(function (x) { seedIds[x.id] = 1; }); }
+    return !seedIds[e.id];
+  }
+
+  /* Filtre par muscle : « Tous », « Mes exercices », puis un bouton par muscle. */
+  const PERSO = '__perso';
+  function muscleChips(current, act) {
+    const opts = [['', 'Tous'], [PERSO, 'Mes exercices']].concat(Seed.MUSCLES.map(function (m) { return [m, m]; }));
+    return opts.map(function (o) {
+      return '<button class="mf-chip' + (current === o[0] ? ' on' : '') + '" data-act="' + act + '" data-v="' + h(o[0]) + '">' + h(o[1]) + '</button>';
+    }).join('');
+  }
+  function byMuscle(list, m) {
+    if (!m) return list;
+    if (m === PERSO) return list.filter(isCustom);
+    return list.filter(function (e) { return (e.muscle || 'Autre') === m; });
+  }
+  function alpha(a, b) { return a.name.localeCompare(b.name, 'fr'); }
+
+  /* Liste groupee par muscle (ou a plat si un muscle est choisi). */
+  function groupedList(list, m, row, headCls) {
+    if (m && m !== PERSO) return list.sort(alpha).map(row).join('');
     let html = '';
+    Seed.MUSCLES.concat(['Autre']).forEach(function (mu) {
+      const l = list.filter(function (e) { return (e.muscle || 'Autre') === mu; }).sort(alpha);
+      if (l.length) html += '<div class="' + headCls + '">' + h(mu) + '</div>' + l.map(row).join('');
+    });
+    return html;
+  }
+
+  function renderPicker() {
+    const raw = $('#pk-q').value.trim();
+    const q = norm(raw);
+    const m = ui.pkMuscle || '';
+    $('#pk-filters').innerHTML = muscleChips(m, 'pk-filter');
+    const all = byMuscle(liveExercises(), m);
+    let html = '';
+    if (!liveExercises().some(function (e) { return norm(e.name) === q; })) {
+      html += '<button class="pk-row create" data-act="pk-create">' + ic.plus + '<span>' + (raw ? 'Créer « ' + h(raw) + ' »' : 'Créer mon exercice') + '</span></button>';
+    }
     if (q) {
-      const hits = all.filter(function (e) { return norm(e.name).indexOf(q) >= 0 || norm(e.muscle).indexOf(q) >= 0; })
-        .sort(function (a, b) { return norm(a.name).indexOf(q) - norm(b.name).indexOf(q) || a.name.localeCompare(b.name, 'fr'); });
-      if (!all.some(function (e) { return norm(e.name) === q; })) {
-        html += '<button class="pk-row create" data-act="pk-create">' + ic.plus + '<span>Créer « ' + h($('#pk-q').value.trim()) + ' »</span></button>';
-      }
-      html += hits.map(pkRow).join('');
+      const hits = all.filter(function (e) { return norm(e.name).indexOf(q) >= 0; })
+        .sort(function (a, b) { return norm(a.name).indexOf(q) - norm(b.name).indexOf(q) || alpha(a, b); });
+      html += hits.length ? hits.map(pkRow).join('') : '<p class="muted small pk-none">Aucun exercice trouvé' + (m ? ' dans ce filtre' : '') + '.</p>';
     } else {
-      const rec = recentExIds(8);
-      if (rec.length) html += '<div class="pk-h">Récents</div>' + rec.map(function (id) { return pkRow(exo(id)); }).join('');
-      Seed.MUSCLES.concat(['Autre']).forEach(function (m) {
-        const list = all.filter(function (e) { return (e.muscle || 'Autre') === m; }).sort(function (a, b) { return a.name.localeCompare(b.name, 'fr'); });
-        if (list.length) html += '<div class="pk-h">' + h(m) + '</div>' + list.map(pkRow).join('');
-      });
+      if (!m) {
+        const rec = recentExIds(8);
+        if (rec.length) html += '<div class="pk-h">Récents</div>' + rec.map(function (id) { return pkRow(exo(id)); }).join('');
+      }
+      html += all.length ? groupedList(all, m, pkRow, 'pk-h') : '<p class="muted small pk-none">' + (m === PERSO ? 'Tu n\'as pas encore créé d\'exercice.' : 'Aucun exercice.') + '</p>';
     }
     $('#pk-list').innerHTML = html;
   }
-  function pkRow(e) { return '<button class="pk-row" data-act="pk-pick" data-id="' + e.id + '"><span>' + h(e.name) + '</span><small>' + h(e.muscle || '') + '</small></button>'; }
+  function pkRow(e) {
+    return '<button class="pk-row" data-act="pk-pick" data-id="' + e.id + '"><span>' + h(e.name) + (isCustom(e) ? ' <i class="perso">Perso</i>' : '') + '</span>' + (ui.pkMuscle && ui.pkMuscle !== PERSO ? '' : '<small>' + h(e.muscle || '') + '</small>') + '</button>';
+  }
 
   function musclePicker(title, current, act) {
     return '<div class="sheet-title">' + title + '</div><div class="muscle-grid">' + Seed.MUSCLES.map(function (m) {
@@ -452,6 +490,7 @@
         (t.items.length ? t.items.map(function (i) { return h(exName(i.exId)); }).join(' · ') : 'Aucun exercice') + '</div></div>' + ic.next + '</a>';
     }).join('') + '</div>' : '<div class="empty"><p>Aucune séance type pour l\'instant.</p></div>';
     html += '<button class="btn primary wide" data-act="tpl-new">' + ic.plus + 'Nouvelle séance type</button>';
+    html += '<a class="card row-link lib-link" href="#/exercices"><div><div class="en-name">Mes exercices</div><div class="muted small">Créer, renommer, trier par muscle (' + liveExercises().length + ')</div></div>' + ic.next + '</a>';
     return html;
   }
 
@@ -709,24 +748,27 @@
 
   /* ---------- Bibliotheque d'exercices ---------- */
   function vLibrary() {
-    const all = liveExercises();
-    let html = '<header class="top">' + backBtn('#/reglages', 'Réglages') + '</header><h1 class="ex-title">Exercices</h1>';
-    html += '<button class="btn primary wide" data-act="lib-new">' + ic.plus + 'Nouvel exercice</button>';
-    Seed.MUSCLES.concat(['Autre']).forEach(function (m) {
-      const list = all.filter(function (e) { return (e.muscle || 'Autre') === m; }).sort(function (a, b) { return a.name.localeCompare(b.name, 'fr'); });
-      if (!list.length) return;
-      html += '<h2>' + h(m) + '</h2><div class="card list">' + list.map(function (e) {
-        return '<button class="pk-row" data-act="lib-edit" data-id="' + e.id + '"><span>' + h(e.name) + '</span>' + ic.next + '</button>';
-      }).join('') + '</div>';
-    });
+    const m = ui.libMuscle || '';
+    const all = byMuscle(liveExercises(), m);
+    let html = '<header class="top">' + backBtn('#/programmes', 'Séances types') + '</header><h1 class="ex-title">Mes exercices</h1>';
+    html += '<button class="btn primary wide" data-act="lib-new">' + ic.plus + 'Créer un exercice</button>';
+    html += '<div class="mfilter page">' + muscleChips(m, 'lib-filter') + '</div>';
+    const row = function (e) {
+      return '<button class="pk-row" data-act="lib-edit" data-id="' + e.id + '"><span>' + h(e.name) + (isCustom(e) ? ' <i class="perso">Perso</i>' : '') + '</span>' +
+        (m && m !== PERSO ? '' : '<small>' + h(e.muscle || '') + '</small>') + '</button>';
+    };
+    html += all.length ? '<div class="card list">' + groupedList(all, m, row, 'list-h') + '</div>'
+      : '<p class="muted center">' + (m === PERSO ? 'Tu n\'as pas encore créé d\'exercice : « Créer un exercice » ci-dessus.' : 'Aucun exercice pour ce muscle.') + '</p>';
     return html;
   }
 
-  function libSheet(id) {
+  /* Creation / modification d'un exercice. preset = { name, muscle, fromPicker }. */
+  function libSheet(id, preset) {
     const e = id ? Store.get('exercises', id) : null;
-    const cur = ui.sheet && ui.sheet.type === 'lib' && ui.sheet.id === (id || null) ? ui.sheet : { type: 'lib', id: id || null, muscle: e ? e.muscle : '' };
-    openSheet(cur, '<div class="sheet-title">' + (e ? 'Modifier l\'exercice' : 'Nouvel exercice') + '</div>' +
-      '<input class="name-in sm" id="lib-name" value="' + h(e ? e.name : (cur.name || '')) + '" placeholder="Nom de l\'exercice">' +
+    const cur = ui.sheet && ui.sheet.type === 'lib' && ui.sheet.id === (id || null) ? ui.sheet
+      : Object.assign({ type: 'lib', id: id || null, muscle: e ? e.muscle : '' }, preset || {});
+    openSheet(cur, '<div class="sheet-title">' + (e ? 'Modifier l\'exercice' : 'Créer mon exercice') + '</div>' +
+      '<input class="name-in sm" id="lib-name" value="' + h(e ? e.name : (cur.name || '')) + '" placeholder="Nom (ex : Presse inclinée Technogym)" autocapitalize="sentences" enterkeyhint="done">' +
       musclePicker('Muscle principal', cur.muscle, 'lib-muscle') +
       '<div class="sheet-actions">' + (e ? '<button class="btn danger ghost" data-act="lib-del">Supprimer</button>' : '<button class="btn ghost" data-act="close-sheet">Annuler</button>') +
       '<button class="btn primary" data-act="lib-save">Enregistrer</button></div>');
@@ -825,15 +867,15 @@
       }
       case 'pk-close': closePicker(); break;
       case 'pk-pick': { const cb = ui.pickerCb; closePicker(); if (cb) cb(id); break; }
-      case 'pk-create':
-        ui.pickerCreate = $('#pk-q').value.trim();
-        openSheet({ type: 'pk-muscle' }, musclePicker('Muscle principal de « ' + h(ui.pickerCreate) + ' »', '', 'pk-muscle'));
-        break;
-      case 'pk-muscle': {
-        const newId = createExercise(ui.pickerCreate, el.dataset.v);
-        const cb = ui.pickerCb; closeSheet(); closePicker(); if (cb) cb(newId); else render();
+      case 'pk-create': {
+        const pm = ui.pkMuscle && ui.pkMuscle !== PERSO ? ui.pkMuscle : '';
+        $('#pk-q').blur();
+        libSheet(null, { name: $('#pk-q').value.trim(), muscle: pm, fromPicker: true });
+        if (!$('#lib-name').value) $('#lib-name').focus();
         break;
       }
+      case 'pk-filter': ui.pkMuscle = el.dataset.v; renderPicker(); $('#pk-list').scrollTop = 0; break;
+      case 'lib-filter': ui.libMuscle = el.dataset.v; render(); break;
       case 'tpl-new': {
         const t = { id: Store.uid('t'), name: 'Nouvelle séance', items: [], createdAt: Date.now() };
         Store.put('templates', t); go('#/programme/' + t.id);
@@ -867,9 +909,14 @@
         const c = ui.sheet; const name = $('#lib-name').value.trim();
         if (!name) { shake('#lib-name'); return; }
         if (!c.muscle) { toast('Choisis le muscle principal'); return; }
-        if (c.id) { const e = Store.get('exercises', c.id); e.name = name; e.muscle = c.muscle; Store.put('exercises', e); }
-        else createExercise(name, c.muscle);
-        closeSheet(); render(); break;
+        const twin = liveExercises().find(function (x) { return x.id !== c.id && norm(x.name) === norm(name); });
+        if (twin) { toast('« ' + twin.name + ' » existe déjà'); shake('#lib-name'); return; }
+        if (c.id) { const e = Store.get('exercises', c.id); e.name = name; e.muscle = c.muscle; Store.put('exercises', e); closeSheet(); render(); break; }
+        const newId = createExercise(name, c.muscle);
+        closeSheet();
+        if (c.fromPicker) { const cb = ui.pickerCb; closePicker(); if (cb) cb(newId); else render(); }
+        else { toast('Exercice créé', 'ok'); render(); }
+        break;
       }
       case 'lib-del':
         if (!confirm('Supprimer cet exercice de la bibliothèque ? Son historique reste visible.')) return;
