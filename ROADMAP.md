@@ -29,3 +29,7 @@ App de musculation perso de Louis (iPhone, PWA). Créée le 2026-11-17.
 - Notes par exercice (réglage machine), alternative « OU » dans une séance type.
 - Superséries, séries d'échauffement exclues des stats.
 - Objectif de progression (« +2,5 kg quand 3x10 atteint »).
+
+## Relecture du 18/11 (v1.2.1)
+Bloc de 24 px du minuteur inactif posé sur la barre d'onglets (signalé par Louis) + 10 points d'une relecture indépendante, corrigés et testés : plan qui suivait un exercice remplacé, synchro sans délai max, fichier en ligne illisible qui aurait été écrasé, import mal formé qui plantait au démarrage, feuilles impossibles à fermer sur iOS, clavier sur la feuille, défilement débloqué sous le sélecteur, records de l'historique faussés par les séances plus récentes, Entrée qui créait au lieu de choisir, son du minuteur muet après verrouillage, séance vidée laissée dans l'historique.
+- Piège de test : le serveur local Python laisse le navigateur garder l'ancien CSS/JS en cache. Avant de conclure, `fetch(f, {cache: 'reload'})` sur chaque fichier puis recharger.
