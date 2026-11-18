@@ -138,5 +138,23 @@ t('store.load ajoute les exercices manquants sans ressusciter un supprime', () =
   delete global.localStorage;
 });
 
+
+t('records dans historique : une seance plus recente ne retire pas le badge', () => {
+  const { d, DC } = sample();
+  d.sessions.c = { id: 'c', name: 'Upper', start: '2026-11-15T18:00:00', end: '2026-11-15T19:00:00', updatedAt: 1,
+    entries: [{ id: 'e9', exId: DC, target: 3, sets: [{ kg: 40, reps: 8, at: 20 }] }] };
+  assert.strictEqual(S.prCheck(d, DC, 'b', d.sessions.b.entries[0].sets[0]), 'kg'); /* 32,5 reste un record le 12/11 */
+  assert.strictEqual(S.prCheck(d, DC, 'c', d.sessions.c.entries[0].sets[0]), 'kg');
+});
+
+t('donnees mal formees (import) : jamais de plantage', () => {
+  const n = Store.normalize({ sessions: { s: { id: 's', start: '2026-11-01T10:00:00', entries: [{ id: 'e', exId: 'x', sets: null }, null, { foo: 1 }] }, s2: { id: 's2' } },
+    templates: { t: { id: 't', name: 'A' } } });
+  assert.deepStrictEqual(n.sessions.s.entries.map(e => e.sets), [[]]);
+  assert.deepStrictEqual(n.sessions.s2.entries, []);
+  assert.ok(n.sessions.s2.start);
+  assert.deepStrictEqual(n.templates.t.items, []);
+});
+
 console.log(ok + ' tests OK' + (ko ? ', ' + ko + ' en echec' : ''));
 process.exit(ko ? 1 : 0);

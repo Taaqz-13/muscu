@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.2';
+  const VERSION = '1.2.1';
   const $ = function (s) { return document.querySelector(s); };
   const S = Stats;
 
@@ -245,7 +245,7 @@
   /* Repere de la seance type : « 3 × 8-10 · 60 kg ». null si rien de prevu. */
   function planTxt(sets, plan) {
     if (!plan || (!plan.reps && !plan.kg)) return null;
-    return sets + ' × ' + (plan.reps || '?') + (plan.kg ? ' · ' + kgTxt(plan.kg) : '');
+    return (plan.reps ? sets + ' × ' + plan.reps : sets + ' séries') + (plan.kg ? ' · ' + kgTxt(plan.kg) : '');
   }
 
   function nextEntry(s, e) {
@@ -333,11 +333,12 @@
       '<button class="sheet-btn" data-act="replace">' + ic.swap + 'Remplacer par un autre exercice</button>' +
       (i > 0 ? '<button class="sheet-btn" data-act="move" data-d="-1">' + ic.up + 'Monter</button>' : '') +
       (i < s.entries.length - 1 ? '<button class="sheet-btn" data-act="move" data-d="1">' + ic.down + 'Descendre</button>' : '') +
-      '<button class="sheet-btn danger" data-act="remove-entry">' + ic.x + 'Retirer de la séance</button>');
+      '<button class="sheet-btn danger" data-act="remove-entry">' + ic.x + 'Retirer de la séance</button>' +
+      '<button class="btn ghost wide" data-act="close-sheet">Annuler</button>');
   }
 
   function entryAction(act, d) {
-    const s = active(); const e = s && findEntry(s, ui.sheet && ui.sheet.eid); if (!e) return;
+    const s = active(); const e = s && findEntry(s, ui.sheet && ui.sheet.eid); if (!e) { closeSheet(); return; }
     const i = s.entries.indexOf(e);
     if (act === 'target') {
       e.target = Math.max(1, Math.min(12, (e.target || 3) + d));
@@ -367,7 +368,7 @@
           target = { id: Store.uid('e'), exId: exId, target: ee.target || 3, sets: [] };
           ss.entries.splice(ss.entries.indexOf(ee) + 1, 0, target);
         } else {
-          ee.exId = exId; delete ui.draft[ee.id];
+          ee.exId = exId; delete ee.plan; delete ui.draft[ee.id];
         }
         saveSession(ss);
         go('#/ex/' + target.id);
@@ -436,7 +437,8 @@
       '<div class="sheet-row"><span>Ressenti (RPE)</span><div class="rpe-chips">' + [6, 7, 8, 9, 10].map(function (v) {
         return '<button class="chip-btn' + (cur.rpe === v ? ' on' : '') + '" data-act="sh-rpe" data-v="' + v + '">' + v + '</button>';
       }).join('') + '</div></div>' +
-      '<div class="sheet-actions"><button class="btn danger ghost" data-act="set-del">Supprimer</button><button class="btn primary" data-act="set-save">Enregistrer</button></div>');
+      '<div class="sheet-actions"><button class="btn danger ghost" data-act="set-del">Supprimer</button><button class="btn primary" data-act="set-save">Enregistrer</button></div>' +
+      '<button class="link" data-act="close-sheet">Annuler</button>');
   }
 
   function setSave(del) {
@@ -449,6 +451,9 @@
       Object.assign(e.sets[c.i], { kg: c.kg || 0, reps: Math.round(c.reps), rpe: c.rpe || null });
     }
     if (s.end) s.entries = s.entries.filter(function (x) { return x.sets.length; });
+    if (s.end && !s.entries.length && confirm('Plus aucune série dans cette séance. La supprimer de l\'historique ?')) {
+      Store.remove('sessions', s.id); closeSheet(); go('#/historique'); return;
+    }
     saveSession(s);
     if (del && !s.end) delete ui.draft[e.id];
     closeSheet(); render();
@@ -464,7 +469,9 @@
     $('#picker').classList.add('open');
     document.body.classList.add('noscroll');
   }
-  function closePicker() { $('#picker').classList.remove('open'); document.body.classList.remove('noscroll'); ui.pickerCb = null; $('#pk-q').blur(); }
+  function closePicker() { $('#picker').classList.remove('open'); syncScrollLock(); ui.pickerCb = null; $('#pk-q').blur(); }
+  /* Defilement de la page bloque tant qu'une feuille OU le selecteur est ouvert. */
+  function syncScrollLock() { document.body.classList.toggle('noscroll', $('#sheet').classList.contains('open') || $('#picker').classList.contains('open')); }
 
   function recentExIds(limit) {
     const out = [];
@@ -852,7 +859,7 @@
   function closeSheet() {
     ui.sheet = null;
     $('#sheet').classList.remove('open');
-    document.body.classList.remove('noscroll');
+    syncScrollLock();
   }
 
   let toastT = null;
@@ -899,7 +906,7 @@
   function unlockAudio() {
     try {
       if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
-      if (audio.state === 'suspended') audio.resume();
+      if (audio.state !== 'running') audio.resume();
     } catch (e) { audio = null; }
   }
   function beep() {
@@ -1115,13 +1122,27 @@
     if (t.id === 'tpl-name' || t.classList.contains('ti-in')) t.blur();
     if (t.id === 'in-kg') { $('#in-reps').focus(); ev.preventDefault(); }
     else if (t.id === 'in-reps') { t.blur(); validateSet(routeParts()[1]); }
-    else if (t.id === 'pk-q') { const first = $('#pk-list [data-act]'); if (first) first.click(); }
+    else if (t.id === 'pk-q') { const first = $('#pk-list [data-act="pk-pick"]') || $('#pk-list [data-act]'); if (first) first.click(); }
   });
 
   /* Selection du contenu a la prise de focus : on tape directement la nouvelle valeur. */
   document.addEventListener('focusin', function (ev) {
     if (['in-kg', 'in-reps', 'sh-kg', 'sh-reps'].indexOf(ev.target.id) >= 0) setTimeout(function () { try { ev.target.select(); } catch (e) { /* */ } }, 0);
   });
+
+  /* iOS ne declenche pas toujours le click delegue sur un simple div : ecouteur direct sur le fond. */
+  $('#sheet').addEventListener('click', function (ev) { if (ev.target === this) closeSheet(); });
+
+  /* Clavier iOS : il recouvre les elements fixes. On remonte la feuille du bas de la hauteur du clavier. */
+  if (window.visualViewport) {
+    const kb = function () {
+      const vv = window.visualViewport;
+      const hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty('--kb', hidden + 'px');
+    };
+    window.visualViewport.addEventListener('resize', kb);
+    window.visualViewport.addEventListener('scroll', kb);
+  }
 
   window.addEventListener('hashchange', function () {
     if (ui.skipHash && location.hash === ui.skipHash) { ui.skipHash = null; return; }

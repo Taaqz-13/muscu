@@ -317,3 +317,10 @@ body.resting { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) +
 .ex-title.with-icon .micon { width: 54px; height: 54px; border-radius: 14px; }
 .ex-title.with-icon .micon svg { width: 52px; height: 52px; }
 .entry { gap: 10px; }
+/* Minuteur inactif = totalement retire (il depassait de 24 px sur la barre d'onglets, signale par Louis le 18/11). */
+#rest:not(.show) { display: none; }
+/* Fond des feuilles : tap pour fermer (iOS exige un curseur pour emettre le click). */
+.overlay { cursor: pointer; }
+.overlay > * { cursor: auto; }
+/* Feuille du bas remontee au-dessus du clavier iOS. */
+.sheet-card { margin-bottom: var(--kb, 0px); max-height: calc(88vh - var(--kb, 0px)); }

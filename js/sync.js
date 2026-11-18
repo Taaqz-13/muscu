@@ -84,7 +84,7 @@
 
     _get: async function () {
       const url = this._url() + '?ref=' + encodeURIComponent(Store.settings.branch) + '&t=' + Date.now();
-      const r = await fetch(url, { headers: this._headers(), cache: 'no-store' });
+      const r = await this._fetch(url, { headers: this._headers(), cache: 'no-store' });
       if (r.status === 404) return { doc: null, sha: null };
       if (!r.ok) throw this._err(r);
       const j = await r.json();
@@ -93,12 +93,14 @@
         const bytes = Uint8Array.from(atob(j.content.replace(/\n/g, '')), function (c) { return c.charCodeAt(0); });
         text = new TextDecoder('utf-8').decode(bytes);
       } else if (j.size > 0) {
-        const raw = await fetch(url, { headers: this._headers('application/vnd.github.raw+json'), cache: 'no-store' });
+        const raw = await this._fetch(url, { headers: this._headers('application/vnd.github.raw+json'), cache: 'no-store' });
         if (!raw.ok) throw this._err(raw);
         text = await raw.text();
       } else { text = ''; }
       let doc = null;
       try { doc = JSON.parse(text); } catch (e) { doc = null; }
+      /* Le fichier existe mais il est illisible : surtout ne pas l'ecraser avec les seules donnees du telephone. */
+      if (!doc && text.trim()) { const err = new Error('illisible'); err.status = 'unreadable'; throw err; }
       return { doc: doc, sha: j.sha };
     },
 
@@ -110,15 +112,26 @@
       }
       const body = { message: 'sync ' + new Date().toISOString(), content: btoa(bin), branch: Store.settings.branch };
       if (sha) body.sha = sha;
-      const r = await fetch(this._url(), { method: 'PUT', headers: this._headers(), body: JSON.stringify(body) });
+      const r = await this._fetch(this._url(), { method: 'PUT', headers: this._headers(), body: JSON.stringify(body) });
       if (!r.ok) throw this._err(r);
       return r.json();
+    },
+
+    /* Reseau de salle de sport : un appel qui ne repond pas ne doit pas bloquer la copie pour toujours. */
+    _fetch: async function (url, opts) {
+      const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const t = ctl ? setTimeout(function () { ctl.abort(); }, 20000) : null;
+      try { return await fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : {})); }
+      catch (e) { if (e && e.name === 'AbortError') { const err = new Error('délai dépassé'); err.status = 'timeout'; throw err; } throw e; }
+      finally { if (t) clearTimeout(t); }
     },
 
     _err: function (r) { const e = new Error('GitHub ' + r.status); e.status = r.status; return e; },
 
     _explain: function (e) {
       if (!navigator.onLine) return 'Hors ligne : la copie reprendra toute seule.';
+      if (e.status === 'timeout') return 'Réseau trop lent : la copie réessaiera toute seule.';
+      if (e.status === 'unreadable') return 'Le fichier en ligne est illisible : rien n\'a été écrasé. Préviens Claude.';
       if (e.status === 401) return 'Jeton invalide ou expiré : vérifie-le ci-dessous.';
       if (e.status === 403) return 'Accès refusé par GitHub (droits du jeton ou limite atteinte).';
       if (e.status === 404) return 'Dépôt introuvable : le jeton a-t-il accès à ' + Store.settings.owner + '/' + Store.settings.repo + ' ?';

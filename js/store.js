@@ -17,13 +17,29 @@
     return (prefix || '') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
 
+  /* Garantit les tableaux attendus par l'affichage (un import ou un fichier
+     edite a la main ne doit jamais faire planter l'app au demarrage). */
+  function fix(c, o) {
+    if (o.deleted) return o;
+    if (c === 'templates' && !Array.isArray(o.items)) o.items = [];
+    if (c === 'templates') o.items = o.items.filter(function (i) { return i && i.exId; });
+    if (c === 'sessions') {
+      if (!Array.isArray(o.entries)) o.entries = [];
+      o.entries = o.entries.filter(function (e) { return e && e.exId; });
+      o.entries.forEach(function (e) { if (!Array.isArray(e.sets)) e.sets = []; if (!e.id) e.id = uid('e'); });
+      if (!o.start) o.start = new Date(o.updatedAt || Date.now()).toISOString();
+      if (!o.name) o.name = 'Séance';
+    }
+    return o;
+  }
+
   function normalize(d) {
     const out = emptyDoc();
     if (!d || typeof d !== 'object') return out;
     COLLS.forEach(function (c) {
       const src = d[c];
       if (src && typeof src === 'object') {
-        Object.keys(src).forEach(function (k) { if (src[k] && src[k].id) out[c][k] = src[k]; });
+        Object.keys(src).forEach(function (k) { if (src[k] && src[k].id) out[c][k] = fix(c, src[k]); });
       }
     });
     return out;

@@ -66,9 +66,11 @@
      Premiere fois sur l'exercice = pas de record (rien a battre). */
   function prCheck(doc, exId, sessionId, set) {
     let prior = [];
-    sessions(doc).forEach(function (s) {
+    const list = sessions(doc);
+    const me = list.find(function (s) { return s.id === sessionId; });
+    list.forEach(function (s) {
       const sets = setsOf(s, exId);
-      if (s.id !== sessionId) prior = prior.concat(sets);
+      if (s.id !== sessionId) { if (!me || s.start < me.start) prior = prior.concat(sets); }
       else prior = prior.concat(sets.filter(function (x) { return x !== set && x.at < set.at; }));
     });
     if (!prior.length) return null;
