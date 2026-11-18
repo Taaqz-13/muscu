@@ -6,6 +6,7 @@
   --accent: #c8f031; --on-accent: #121212; --accent-ink: #3f6b00;
   --danger: #c2341b; --good: #2c7a35; --pr: #b07800; --pr-bg: #fff3d1;
   --bar-prev: #cfcfc6;
+  --skip: #b25e00; --skip-bg: #fff0dc; --swap: #1d5fc4; --swap-bg: #e3edff; --del-bg: #fde6e1; --warn: #a86400; --warn-bg: #fff4dc;
   --r: 16px;
   --tab-h: 64px;
   color-scheme: light dark;
@@ -17,6 +18,7 @@
     --accent: #d4ff3a; --on-accent: #111; --accent-ink: #d4ff3a;
     --danger: #ff6d55; --good: #7bd88f; --pr: #ffc94a; --pr-bg: #3a2f10;
     --bar-prev: #3a3d42;
+    --skip: #ffb45c; --skip-bg: #3a2914; --swap: #86b4ff; --swap-bg: #16243d; --del-bg: #3a1a15; --warn: #ffc56a; --warn-bg: #33270f;
   }
 }
 
@@ -324,3 +326,47 @@ body.resting { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) +
 .overlay > * { cursor: auto; }
 /* Feuille du bas remontee au-dessus du clavier iOS. */
 .sheet-card { margin-bottom: var(--kb, 0px); max-height: calc(88vh - var(--kb, 0px)); }
+
+/* ---------- v1.3 : exercice en cours, menu en couleurs, seance oubliee ---------- */
+.ex-top .back { color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px 8px 10px; margin-left: 0; gap: 6px; }
+.ex-top .back b { color: var(--accent-ink); margin-left: 2px; }
+.ex-top .back .ic { width: 18px; height: 18px; }
+.ex-strip { display: flex; gap: 4px; margin: 2px 0 8px; }
+.ex-strip .seg { flex: 1; height: 8px; border-radius: 4px; background: var(--surface2); padding: 0; min-width: 0; }
+.ex-strip .seg.started { background: color-mix(in srgb, var(--accent) 45%, var(--surface2)); }
+.ex-strip .seg.done { background: var(--accent); }
+.ex-strip .seg.cur { outline: 2px solid var(--text); outline-offset: 1px; }
+.ex-pos { margin-bottom: 6px; }
+.entry.cur { border-color: var(--accent-ink); box-shadow: 0 0 0 1px var(--accent-ink); }
+.cur-tag { font-style: normal; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--on-accent); background: var(--accent); border-radius: 6px; padding: 2px 6px; vertical-align: 2px; margin-left: 4px; }
+.del-live { margin-top: 26px; color: var(--danger); gap: 8px; }
+
+.m-sets { background: var(--surface2); border-radius: 14px; padding: 0 12px; margin-bottom: 6px; }
+.m-group { display: flex; flex-direction: column; gap: 8px; }
+.sheet-btn.m-skip, .sheet-btn.m-swap, .sheet-btn.m-del { padding: 10px 12px; min-height: 62px; border-radius: 14px; }
+.m-skip { background: var(--skip-bg); }
+.m-swap { background: var(--swap-bg); }
+.m-del { background: var(--del-bg); margin-top: 10px; }
+.m-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: #fff; }
+.m-ic .ic { color: inherit; }
+.m-skip .m-ic { background: var(--skip); }
+.m-swap .m-ic { background: var(--swap); }
+.m-del .m-ic { background: var(--danger); }
+.m-skip b { color: var(--skip); } .m-swap b { color: var(--swap); } .m-del b { color: var(--danger); }
+.m-tx { display: flex; flex-direction: column; line-height: 1.25; }
+.m-tx b { font-size: 17px; }
+.m-tx small { font-size: 13px; font-weight: 500; color: var(--muted); }
+.sheet-btn.m-skip:active, .sheet-btn.m-swap:active, .sheet-btn.m-del:active { filter: brightness(.95); }
+.m-move { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.m-mv { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 46px; border-radius: 12px; border: 1px solid var(--line); font-weight: 600; color: var(--text); }
+.m-mv .ic { color: var(--muted); width: 18px; }
+.m-mv[disabled] { opacity: .35; }
+.m-mv:active { background: var(--surface2); }
+
+.stale { background: var(--warn-bg); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); margin-bottom: 12px; }
+.stale-t { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--warn); font-size: 16px; }
+.stale-t .ic { width: 20px; height: 20px; }
+.stale p { margin: 6px 0 10px; }
+.stale-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.stale-acts .btn { flex: 1 1 0; min-width: 90px; padding: 0 10px; }
+.tab.stale::after { background: var(--warn); }

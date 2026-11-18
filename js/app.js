@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.2.1';
+  const VERSION = '1.3.0';
   const $ = function (s) { return document.querySelector(s); };
   const S = Stats;
 
@@ -135,6 +135,7 @@
     let html;
     switch (p[0]) {
       case undefined: html = vHome(); break;
+      case 'seance': html = active() ? vLive(active()) : vHome(); break;
       case 'ex': html = vExercise(p[1]); break;
       case 'programmes': html = vTemplates(); break;
       case 'programme': html = vTemplate(p[1]); break;
@@ -151,13 +152,14 @@
     const slot = $('#rest-slot');
     if (slot) slot.appendChild(restEl);
     renderRest();
-    const tab = { '': 'seance', ex: 'seance', programmes: 'prog', programme: 'prog', exercices: 'prog', stats: 'stats', historique: 'hist' }[p[0] || ''] || '';
+    const tab = { '': 'seance', seance: 'seance', ex: 'seance', programmes: 'prog', programme: 'prog', exercices: 'prog', stats: 'stats', historique: 'hist' }[p[0] || ''] || '';
     document.querySelectorAll('#tabbar .tab').forEach(function (t) { t.classList.toggle('on', t.dataset.tab === tab); });
     if (r !== ui.lastRoute) { window.scrollTo(0, 0); ui.lastRoute = r; }
     updateSyncDot();
     const s = active();
-    wake(!!s && (p[0] === undefined || p[0] === 'ex'));
+    wake(!!s && (p[0] === undefined || p[0] === 'ex' || p[0] === 'seance'));
     $('#tabbar .tab[data-tab="seance"]').classList.toggle('live', !!s);
+    $('#tabbar .tab[data-tab="seance"]').classList.toggle('stale', !!s && isStale(s));
   }
 
   /* Rendu immediat (pas d'attente du hashchange, qui arriverait apres un focus
@@ -170,7 +172,12 @@
   /* ---------- Accueil seance ---------- */
   function vHome() {
     const s = active();
-    if (s) return vLive(s);
+    if (s) {
+      /* Seance lancee : on montre l'exercice en cours, pas la liste. */
+      const c = curEntry(s);
+      if (c) { go('#/ex/' + c.id); return null; }
+      return vLive(s);
+    }
     const tpls = templates();
     let html = top('Séance', gearBtn());
     if (!tpls.length) {
@@ -213,24 +220,59 @@
   }
 
   /* ---------- Seance en cours ---------- */
+  const CUR_KEY = 'muscu.cur.v1';
+  const STALE_MS = 3 * 3600 * 1000; /* 3 h sans serie = seance sans doute oubliee */
+  function isDone(e) { return e.sets.length >= (e.target || 3); }
+  function setCur(s, e) { try { localStorage.setItem(CUR_KEY, JSON.stringify({ sid: s.id, eid: e.id })); } catch (x) { /* */ } }
+  /* Exercice en cours : le dernier ouvert s'il n'est pas fini, sinon le prochain a faire. */
+  function curEntry(s) {
+    let id = null;
+    try { const c = JSON.parse(localStorage.getItem(CUR_KEY) || 'null'); if (c && c.sid === s.id) id = c.eid; } catch (x) { /* */ }
+    const saved = id && findEntry(s, id);
+    if (saved && !isDone(saved)) return saved;
+    let open = null;
+    if (saved) { const i = s.entries.indexOf(saved); for (let k = 1; k <= s.entries.length && !open; k++) { const c = s.entries[(i + k) % s.entries.length]; if (!isDone(c)) open = c; } }
+    else open = s.entries.find(function (e) { return !isDone(e); });
+    return open || saved || s.entries[s.entries.length - 1] || null;
+  }
+  function lastAct(s) {
+    let t = new Date(s.start).getTime();
+    s.entries.forEach(function (e) { e.sets.forEach(function (x) { if (x.at > t) t = x.at; }); });
+    return t;
+  }
+  function setCount(s) { return s.entries.reduce(function (a, e) { return a + e.sets.length; }, 0); }
+  function isStale(s) { return Date.now() - lastAct(s) > STALE_MS; }
+  /* Heure de fin a enregistrer : maintenant, ou la derniere serie (+1 min) si la seance a ete oubliee. */
+  function endTime(s) { return isStale(s) ? lastAct(s) + 60000 : Date.now(); }
+  function staleBanner(s) {
+    if (!isStale(s) || ui.staleOk === s.id) return '';
+    const n = setCount(s);
+    return '<div class="stale card"><div class="stale-t">' + ic.clock + 'Séance ouverte depuis ' + dur(Date.now() - new Date(s.start)) + '</div>' +
+      '<p class="small">' + (n ? 'Dernière série il y a ' + dur(Date.now() - lastAct(s)) + '. Tu as sûrement oublié de la terminer : elle sera enregistrée à l\'heure de ta dernière série.' : 'Aucune série enregistrée. Tu as sûrement oublié de la supprimer.') + '</p>' +
+      '<div class="stale-acts">' + (n ? '<button class="btn primary" data-act="finish">Terminer</button>' : '') +
+      '<button class="btn danger" data-act="abandon">Supprimer</button><button class="btn ghost" data-act="stale-ok">Je continue</button></div></div>';
+  }
+
   function vLive(s) {
     let html = '<header class="top live"><div class="top-t"><div class="eyebrow"><span class="dot-live"></span>En cours · <span data-chrono="' + s.start + '">' + dur(Date.now() - new Date(s.start)) + '</span></div>' +
       '<h1>' + h(s.name) + '</h1></div><div class="top-r">' + gearBtn() + '<button class="btn primary sm" data-act="finish">Terminer</button></div></header>';
+    html += staleBanner(s);
     if (!s.entries.length) html += '<div class="empty"><p>Ajoute ton premier exercice.</p></div>';
-    html += '<div class="stack">' + s.entries.map(function (e) { return entryRow(s, e); }).join('') + '</div>';
+    const cur = curEntry(s);
+    html += '<div class="stack">' + s.entries.map(function (e) { return entryRow(s, e, e === cur); }).join('') + '</div>';
     html += '<button class="btn ghost wide" data-act="add-entry">' + ic.plus + 'Ajouter un exercice</button>';
-    html += '<button class="link danger" data-act="abandon">Abandonner la séance</button>';
+    html += '<button class="btn danger ghost wide del-live" data-act="abandon">' + ic.x + 'Supprimer la séance en cours</button>';
     return html;
   }
 
-  function entryRow(s, e) {
+  function entryRow(s, e, isCur) {
     const n = e.sets.length, tgt = e.target || 3, done = n >= tgt;
     const lp = S.lastPerf(doc(), e.exId, s.id);
     const pl = planTxt(tgt, e.plan);
     const sub = n ? "Aujourd'hui : " + setsLine(e.sets) : (lp ? 'Dernière : ' + setsLine(lp.sets) : pl ? 'Prévu : ' + pl : 'Première fois');
-    return '<div class="entry' + (done ? ' done' : n ? ' started' : '') + '" data-act="open-ex" data-id="' + e.id + '">' +
+    return '<div class="entry' + (done ? ' done' : n ? ' started' : '') + (isCur ? ' cur' : '') + '" data-act="open-ex" data-id="' + e.id + '">' +
       '<div class="prog">' + (done ? ic.check : n + '/' + tgt) + '</div>' + exIcon(e.exId) +
-      '<div class="en-main"><div class="en-name">' + h(exName(e.exId)) + '</div><div class="en-sub">' + h(sub) + '</div></div>' +
+      '<div class="en-main"><div class="en-name">' + h(exName(e.exId)) + (isCur && !done ? ' <i class="cur-tag">En cours</i>' : '') + '</div><div class="en-sub">' + h(sub) + '</div></div>' +
       '<button class="iconbtn" data-act="entry-menu" data-id="' + e.id + '" aria-label="Options">' + ic.dots + '</button></div>';
   }
 
@@ -265,7 +307,17 @@
     const b = S.bests(doc(), e.exId);
     const d = ui.draft[e.id] || (ui.draft[e.id] = initDraft(s, e));
     const n = e.sets.length;
-    let html = '<header class="top">' + backBtn('#/', 'Séance') + '<div class="top-r"><button class="iconbtn" data-act="entry-menu" data-id="' + e.id + '" aria-label="Options">' + ic.dots + '</button></div></header>';
+    setCur(s, e);
+    const idx = s.entries.indexOf(e), total = s.entries.length;
+    const doneN = s.entries.filter(isDone).length;
+    let html = '<header class="top ex-top">' + '<a class="back" href="#/seance">' + ic.list + '<span>Tous les exos <b>' + doneN + '/' + total + '</b></span></a>' +
+      '<div class="top-r"><button class="btn primary sm" data-act="finish">Terminer</button>' +
+      '<button class="iconbtn" data-act="entry-menu" data-id="' + e.id + '" aria-label="Options de l\'exercice">' + ic.dots + '</button></div></header>';
+    html += staleBanner(s);
+    html += '<div class="ex-strip">' + s.entries.map(function (x) {
+      return '<button class="seg' + (isDone(x) ? ' done' : x.sets.length ? ' started' : '') + (x === e ? ' cur' : '') + '" data-act="open-ex" data-id="' + x.id + '" aria-label="' + h(exName(x.exId)) + '"></button>';
+    }).join('') + '</div>';
+    html += '<div class="eyebrow ex-pos"><span class="dot-live"></span>' + h(s.name) + ' · <span data-chrono="' + s.start + '">' + dur(Date.now() - new Date(s.start)) + '</span> · Exo ' + (idx + 1) + '/' + total + '</div>';
     html += '<h1 class="ex-title with-icon">' + exIcon(e.exId) + '<span>' + h(exName(e.exId)) + '</span></h1>';
     html += '<div class="last card">' +
       '<div class="eyebrow">' + (lp ? 'Dernière fois · ' + dLong(lp.date) : 'Première fois sur cet exercice') + '</div>' +
@@ -328,12 +380,15 @@
     const i = s.entries.indexOf(e);
     openSheet({ type: 'entry', eid: e.id },
       '<div class="sheet-title">' + h(exName(e.exId)) + '</div>' +
-      '<div class="sheet-row"><span>Séries prévues</span><div class="mini-step"><button class="st-btn sm" data-act="target" data-d="-1">−</button><b>' + (e.target || 3) + '</b><button class="st-btn sm" data-act="target" data-d="1">+</button></div></div>' +
-      '<button class="sheet-btn" data-act="skip">' + ic.skip + 'Passer (le mettre à la fin)</button>' +
-      '<button class="sheet-btn" data-act="replace">' + ic.swap + 'Remplacer par un autre exercice</button>' +
-      (i > 0 ? '<button class="sheet-btn" data-act="move" data-d="-1">' + ic.up + 'Monter</button>' : '') +
-      (i < s.entries.length - 1 ? '<button class="sheet-btn" data-act="move" data-d="1">' + ic.down + 'Descendre</button>' : '') +
-      '<button class="sheet-btn danger" data-act="remove-entry">' + ic.x + 'Retirer de la séance</button>' +
+      '<div class="sheet-row m-sets"><span>Séries prévues</span><div class="mini-step"><button class="st-btn sm" data-act="target" data-d="-1">−</button><b>' + (e.target || 3) + '</b><button class="st-btn sm" data-act="target" data-d="1">+</button></div></div>' +
+      '<div class="m-group">' +
+      '<button class="sheet-btn m-skip" data-act="skip"><span class="m-ic">' + ic.skip + '</span><span class="m-tx"><b>Passer</b><small>Le mettre à la fin de la séance</small></span></button>' +
+      '<button class="sheet-btn m-swap" data-act="replace"><span class="m-ic">' + ic.swap + '</span><span class="m-tx"><b>Remplacer</b><small>Machine prise : choisir un autre exercice</small></span></button>' +
+      '</div>' +
+      (s.entries.length > 1 ? '<div class="m-move">' +
+        '<button class="m-mv" data-act="move" data-d="-1"' + (i > 0 ? '' : ' disabled') + '>' + ic.up + 'Monter</button>' +
+        '<button class="m-mv" data-act="move" data-d="1"' + (i < s.entries.length - 1 ? '' : ' disabled') + '>' + ic.down + 'Descendre</button></div>' : '') +
+      '<button class="sheet-btn m-del" data-act="remove-entry"><span class="m-ic">' + ic.x + '</span><span class="m-tx"><b>Retirer de la séance</b><small>Seulement pour aujourd\'hui</small></span></button>' +
       '<button class="btn ghost wide" data-act="close-sheet">Annuler</button>');
   }
 
@@ -352,13 +407,13 @@
       let nx = null;
       for (let k = i; k < s.entries.length - 1 && !nx; k++) { if (s.entries[k].sets.length < (s.entries[k].target || 3)) nx = s.entries[k]; }
       if (!nx) nx = nextEntry(s, e);
-      go(routeParts()[0] === 'ex' && nx ? '#/ex/' + nx.id : '#/');
+      go(routeParts()[0] === 'ex' && nx ? '#/ex/' + nx.id : '#/seance');
     } else if (act === 'move') {
       const j = i + d; if (j < 0 || j >= s.entries.length) return;
       s.entries.splice(i, 1); s.entries.splice(j, 0, e); saveSession(s); render();
     } else if (act === 'remove-entry') {
       if (e.sets.length && !confirm('Retirer ' + exName(e.exId) + ' et ses ' + e.sets.length + ' séries ?')) return;
-      s.entries.splice(i, 1); saveSession(s); go('#/');
+      s.entries.splice(i, 1); saveSession(s); go(routeParts()[0] === 'seance' ? '#/seance' : '#/');
     } else if (act === 'replace') {
       openPicker('Remplacer ' + exName(e.exId), function (exId) {
         const ss = active(); const ee = ss && findEntry(ss, e.id); if (!ee) return;
@@ -394,10 +449,13 @@
       return;
     }
     const t = templateChanged(s);
+    const stale = isStale(s);
     openSheet({ type: 'finish' }, '<div class="sheet-title">Terminer « ' + h(s.name) + ' » ?</div>' +
-      '<div class="tiles">' + tile('Durée', dur(sum.duration)) + tile('Séries', sum.sets) + tile('Tonnage', tonTxt(sum.tonnage)) + tile('Records', sum.prs, sum.prs ? 'is-pr' : '') + '</div>' +
+      (stale ? '<p class="muted small">Fin enregistrée à ' + hm(new Date(endTime(s)).toISOString()) + ', l\'heure de ta dernière série.</p>' : '') +
+      '<div class="tiles">' + tile('Durée', dur(endTime(s) - new Date(s.start))) + tile('Séries', sum.sets) + tile('Tonnage', tonTxt(sum.tonnage)) + tile('Records', sum.prs, sum.prs ? 'is-pr' : '') + '</div>' +
       (t ? '<label class="check"><input type="checkbox" id="upd-tpl"><span>Mettre à jour la séance type « ' + h(t.name) + ' » avec les exercices et l\'ordre d\'aujourd\'hui</span></label>' : '') +
-      '<div class="sheet-actions"><button class="btn ghost" data-act="close-sheet">Continuer</button><button class="btn primary" data-act="finish-now">Terminer</button></div>');
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close-sheet">Continuer</button><button class="btn primary" data-act="finish-now">Terminer</button></div>' +
+      '<button class="link danger" data-act="abandon">Supprimer la séance sans l\'enregistrer</button>');
   }
 
   function finishNow() {
@@ -416,7 +474,7 @@
       Store.put('templates', t);
     }
     s.entries = s.entries.filter(function (e) { return e.sets.length; });
-    s.end = new Date().toISOString();
+    s.end = new Date(endTime(s)).toISOString();
     saveSession(s);
     ui.draft = {};
     closeSheet();
@@ -1014,8 +1072,11 @@
       case 'finish': finishSheet(); break;
       case 'finish-now': finishNow(); break;
       case 'close-sheet': closeSheet(); break;
-      case 'abandon':
-        if (!confirm('Abandonner la séance ? Les séries saisies seront supprimées.')) return;
+      case 'stale-ok': { const s = active(); if (s) ui.staleOk = s.id; render(); break; }
+      case 'abandon': {
+        const s = active(); const n = s ? setCount(s) : 0;
+        if (n && !confirm('Supprimer cette séance et ses ' + n + ' série' + (n > 1 ? 's' : '') + ' ? Rien ne sera enregistré.')) return;
+      }
         /* falls through */
       case 'abandon-now': {
         const s = active(); if (s) Store.remove('sessions', s.id);
@@ -1174,6 +1235,7 @@
   Sync.init();
   render();
   resumeRest();
+  { const s = active(); const p0 = routeParts()[0]; if (s && isStale(s) && p0 && p0 !== 'ex' && p0 !== 'seance') toast('Une séance est restée ouverte : onglet Séance'); }
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(function () { /* hors ligne indisponible */ });
   }
